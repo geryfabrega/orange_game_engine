@@ -16,28 +16,42 @@ void game_tick(std::vector<item_loader::mesh_actor>& actor_vec) {
 
 void submit_actors(std::vector<item_loader::mesh_actor>& actor_vec, renderer::renderer& render_obj) {
     for (auto& act : actor_vec) {
-        render_obj.submit(act.draw_self());
+        // Construct the payload with vertices, triangles, and a custom actor color
+        renderer::RenderPayload payload;
+        auto mesh_data = act.draw_self();
+        
+        payload.vertices = std::move(mesh_data.first);
+        payload.triangles = std::move(mesh_data.second);
+        payload.base_color = sf::Color(220, 100, 50); // Vibrant Copper/Orange Teapot!
+
+        render_obj.submit(std::move(payload));
     }
 }
 
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 3D Engine");
+    sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 3D Light Engine");
     
     renderer::renderer my_renderer;
     renderer::Camera main_camera;
+
+    // Create a sun light coming down from the top-right-front
+    renderer::DirectionalLight sun_light;
+    sun_light.dir_x = -0.5f;
+    sun_light.dir_y = -1.0f;
+    sun_light.dir_z = 0.5f;
+    sun_light.ambient = 0.25f; // Keep shadow side softly lit
 
     main_camera.x = 0.0f;
     main_camera.y = 0.0f;
     main_camera.z = 0.0f; 
 
     std::vector<item_loader::mesh_actor> actor_store;
-    item_loader::mesh_actor teapot("assets/deet.obj", 0.0f, 0.0f, 20.0f);
+    item_loader::mesh_actor teapot("assets/deet.obj", 0.0f, 0.0f, 5.0f);
     actor_store.push_back(teapot);
 
-    // Movement and rotation speeds
     const float move_speed = 0.5f;
-    const float rot_speed = 0.03f; // Radians per tick (~1.7 degrees)
+    const float rot_speed = 0.03f;
 
     while (window.isOpen())
     {
@@ -48,29 +62,22 @@ int main()
                 window.close();
         }
 
-        // =====================================================================
-        // 1. CAMERA ROTATION (Arrow Keys)
-        // =====================================================================
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))  main_camera.yaw -= rot_speed;  // Turn Left
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) main_camera.yaw += rot_speed;  // Turn Right
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))    main_camera.pitch -= rot_speed; // Look Up
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))  main_camera.pitch += rot_speed; // Look Down
+        // --- Camera Rotation (Arrow Keys) ---
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))  main_camera.yaw -= rot_speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) main_camera.yaw += rot_speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))    main_camera.pitch -= rot_speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))  main_camera.pitch += rot_speed;
 
-        // Optional: Clamp pitch so the camera doesn't flip upside down (+/- 85 degrees)
-        const float max_pitch = 1.48f; // ~85 degrees in radians
+        const float max_pitch = 1.48f;
         if (main_camera.pitch > max_pitch)  main_camera.pitch = max_pitch;
         if (main_camera.pitch < -max_pitch) main_camera.pitch = -max_pitch;
 
-        // =====================================================================
-        // 2. DIRECTIONAL MOVEMENT (WASD) based on Camera Yaw
-        // =====================================================================
-        // Calculate forward and right unit vectors from current Yaw angle
+        // --- Directional Movement (WASD) ---
         float forward_x =  std::sin(main_camera.yaw);
         float forward_z =  std::cos(main_camera.yaw);
         float right_x   =  std::cos(main_camera.yaw);
         float right_z   = -std::sin(main_camera.yaw);
 
-        // Move Forward / Backward (W / S)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
             main_camera.x += forward_x * move_speed;
             main_camera.z += forward_z * move_speed;
@@ -79,8 +86,6 @@ int main()
             main_camera.x -= forward_x * move_speed;
             main_camera.z -= forward_z * move_speed;
         }
-
-        // Strafe Left / Right (A / D)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
             main_camera.x -= right_x * move_speed;
             main_camera.z -= right_z * move_speed;
@@ -90,20 +95,15 @@ int main()
             main_camera.z += right_z * move_speed;
         }
 
-        // Ascend / Descend vertically (Space / LShift)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))  main_camera.y += move_speed;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) main_camera.y -= move_speed;
 
-        // =====================================================================
-        // 3. ENGINE FRAME PASS
-        // =====================================================================
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        
+        // --- Frame Pass ---
         game_tick(actor_store);
         submit_actors(actor_store, my_renderer);
 
-        window.clear(sf::Color::Black);
-        my_renderer.render(window, main_camera);
+        window.clear(sf::Color(30, 30, 30)); // Dark grey background
+        my_renderer.render(window, main_camera, sun_light);
         window.display();
     }
 

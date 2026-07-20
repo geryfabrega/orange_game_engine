@@ -123,15 +123,6 @@ namespace item_loader {
 
                 mutated_world_vertexes[i] = transformed_vertex;
             }
-
-            // Draw parsed face polygons
-            // for (const auto& triangle : m_triangles) {
-            //     if (triangle.size() < 3) continue; 
-
-            //     draw_line(window, projected_cache[triangle[0]], projected_cache[triangle[1]]);
-            //     draw_line(window, projected_cache[triangle[1]], projected_cache[triangle[2]]);
-            //     draw_line(window, projected_cache[triangle[0]], projected_cache[triangle[2]]);
-            // }
             std::pair<  std::vector<std::vector<float>> , std::vector<std::vector<int>>    > ret_pair{mutated_world_vertexes,m_triangles};
             return ret_pair;
         }

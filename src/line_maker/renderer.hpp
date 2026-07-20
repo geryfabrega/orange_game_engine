@@ -7,54 +7,62 @@
 #include <vector>
 #include <utility>
 #include <cmath>
+#include <algorithm>
 
 namespace renderer {
 
-    // Camera representation
     struct Camera {
-        float x = 0.0f, y = 0.0f, z = 0.0f; // Position
-        float pitch = 0.0f;                 // Rotation looking up/down (radians)
-        float yaw = 0.0f;                   // Rotation looking left/right (radians)
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float pitch = 0.0f;
+        float yaw = 0.0f;
     };
 
-    // Helper alias to keep the type signatures readable
-    using MeshData = std::pair<std::vector<std::vector<float>>, std::vector<std::vector<int>>>;
+    struct DirectionalLight {
+        float dir_x = 0.0f;
+        float dir_y = -1.0f;
+        float dir_z = 1.0f;
+        float ambient = 0.25f;
+    };
 
-    // =========================================================================
-    // GRAPHICS UTILITIES
-    // =========================================================================
+    struct RenderPayload {
+        std::vector<std::vector<float>> vertices;
+        std::vector<std::vector<int>> triangles;
+        sf::Color base_color = sf::Color::Cyan;
+    };
+
+    // Helper structure to bundle a transformed triangle with its depth and shaded color
+    struct ProcessedTriangle {
+        std::pair<float, float> p0;
+        std::pair<float, float> p1;
+        std::pair<float, float> p2;
+        float avg_z;
+        sf::Color color;
+    };
+
     class renderer {
     private:
-        // Holds all submitted mesh payloads until render() is called
-        std::vector<MeshData> m_submit_queue;
+        std::vector<RenderPayload> m_submit_queue;
 
         std::pair<float, float> viewport_to_canvas(float x, float y) {
             float cW = 100.0f;
             float cH = 100.0f;
-            
-            // Add 250.0f so (0,0) in 3D maps directly to the center of your 500x500 window
             return { (x * cW) + 250.0f, (y * cH) + 250.0f };
         }
 
-        // Transforms World Space -> View (Camera) Space by applying OPPOSITE translation & rotation
         std::vector<float> apply_camera_transform(const std::vector<float>& vertex, const Camera& cam) {
-            // 1. Opposite Translation (Move world relative to camera)
             float tx = vertex[0] - cam.x;
             float ty = vertex[1] - cam.y;
             float tz = vertex[2] - cam.z;
 
-            // Pre-calculate trigonometric functions for speed
             float cos_yaw = std::cos(-cam.yaw);
             float sin_yaw = std::sin(-cam.yaw);
             float cos_pitch = std::cos(-cam.pitch);
             float sin_pitch = std::sin(-cam.pitch);
 
-            // 2. Opposite Yaw (Y-axis rotation around camera)
             float rx = tx * cos_yaw - tz * sin_yaw;
             float ry = ty;
             float rz = tx * sin_yaw + tz * cos_yaw;
 
-            // 3. Opposite Pitch (X-axis rotation around camera)
             float final_x = rx;
             float final_y = ry * cos_pitch - rz * sin_pitch;
             float final_z = ry * sin_pitch + rz * cos_pitch;
@@ -63,66 +71,121 @@ namespace renderer {
         }
 
         std::pair<float, float> project_vertex(const std::vector<float>& v) {
-            // Near-plane clipping guard (don't draw stuff behind or directly on the camera)
             if (v[2] <= 0.1f) return { -9999.0f, -9999.0f }; 
             return viewport_to_canvas(v[0] / v[2], v[1] / v[2]);
         }
 
-        void draw_line(sf::RenderWindow& window, std::pair<float, float> point_a, std::pair<float, float> point_b) {
-            // Skip lines that fall outside valid projection space
-            if (point_a.first == -9999.0f || point_b.first == -9999.0f) return;
+        sf::Color calculate_lighting(const std::vector<float>& v0, 
+                                   const std::vector<float>& v1, 
+                                   const std::vector<float>& v2, 
+                                   const sf::Color& base_color,
+                                   const DirectionalLight& light) {
+            float ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
+            float bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
 
-            sf::Vector2f pointA(point_a.first, point_a.second);
-            sf::Vector2f pointB(point_b.first, point_b.second);
+            float nx = ay * bz - az * by;
+            float ny = az * bx - ax * bz;
+            float nz = ax * by - ay * bx;
 
-            sf::VertexArray line(sf::PrimitiveType::Lines, 2);
-            line[0].position = pointA;
-            line[0].color = sf::Color::White;
-            line[1].position = pointB;
-            line[1].color = sf::Color::White;
+            float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+            if (len == 0.0f) len = 1.0f;
+            nx /= len; ny /= len; nz /= len;
 
-            window.draw(line);
+            float lx = -light.dir_x, ly = -light.dir_y, lz = -light.dir_z;
+            float llen = std::sqrt(lx * lx + ly * ly + lz * lz);
+            if (llen == 0.0f) llen = 1.0f;
+            lx /= llen; ly /= llen; lz /= llen;
+
+            float dot = nx * lx + ny * ly + nz * lz;
+            float intensity = std::max(light.ambient, std::min(1.0f, dot + light.ambient));
+
+            return sf::Color(
+                static_cast<sf::Uint8>(base_color.r * intensity),
+                static_cast<sf::Uint8>(base_color.g * intensity),
+                static_cast<sf::Uint8>(base_color.b * intensity)
+            );
         }
 
-        // Processes and draws a single mesh payload using the active camera
-        void draw_mesh_payload(sf::RenderWindow& window, const MeshData& vertexes_triangle_pair, const Camera& cam) {
-            const auto& vertexes_to_draw = vertexes_triangle_pair.first;
-            const auto& m_triangles = vertexes_triangle_pair.second;
+        void draw_solid_triangle(sf::RenderWindow& window, const ProcessedTriangle& tri) {
+            // Skip clipping sentinel points
+            if (tri.p0.first == -9999.0f || tri.p1.first == -9999.0f || tri.p2.first == -9999.0f) return;
 
-            std::vector<std::pair<float, float>> projected_cache(vertexes_to_draw.size());
-            
-            for (size_t i = 0; i < vertexes_to_draw.size(); ++i) {
-                // Step A: Convert world coords to camera view coords
-                std::vector<float> view_vertex = apply_camera_transform(vertexes_to_draw[i], cam);
-                
-                // Step B: Project view coords into 2D screen space
-                projected_cache[i] = project_vertex(view_vertex);
-            }
+            sf::VertexArray va(sf::PrimitiveType::Triangles, 3);
+            va[0].position = sf::Vector2f(tri.p0.first, tri.p0.second);
+            va[1].position = sf::Vector2f(tri.p1.first, tri.p1.second);
+            va[2].position = sf::Vector2f(tri.p2.first, tri.p2.second);
 
-            for (const auto& triangle : m_triangles) {
-                if (triangle.size() < 3) continue; 
+            va[0].color = tri.color;
+            va[1].color = tri.color;
+            va[2].color = tri.color;
 
-                draw_line(window, projected_cache[triangle[0]], projected_cache[triangle[1]]);
-                draw_line(window, projected_cache[triangle[1]], projected_cache[triangle[2]]);
-                draw_line(window, projected_cache[triangle[0]], projected_cache[triangle[2]]);
-            }
+            window.draw(va);
         }
 
     public:
         renderer() = default;
 
-        void submit(const MeshData& mesh_data) {
-            m_submit_queue.push_back(mesh_data);
+        void submit(const RenderPayload& payload) {
+            m_submit_queue.push_back(payload);
         }
 
-        void submit(MeshData&& mesh_data) {
-            m_submit_queue.push_back(std::move(mesh_data));
+        void submit(RenderPayload&& payload) {
+            m_submit_queue.push_back(std::move(payload));
         }
 
-        // render() now accepts the Camera object to transform geometry relative to it
-        void render(sf::RenderWindow& window, const Camera& main_camera) {
+        void render(sf::RenderWindow& window, const Camera& main_camera, const DirectionalLight& light) {
+            std::vector<ProcessedTriangle> raster_queue;
+
+            // 1. Transform, Shade, and Calculate Depth for ALL triangles across ALL objects
             for (const auto& payload : m_submit_queue) {
-                draw_mesh_payload(window, payload, main_camera);
+                const auto& vertices = payload.vertices;
+                const auto& triangles = payload.triangles;
+
+                // Cache camera-space coordinates for accurate Z-depth calculation
+                std::vector<std::vector<float>> view_vertices(vertices.size());
+                std::vector<std::pair<float, float>> projected_cache(vertices.size());
+
+                for (size_t i = 0; i < vertices.size(); ++i) {
+                    view_vertices[i] = apply_camera_transform(vertices[i], main_camera);
+                    projected_cache[i] = project_vertex(view_vertices[i]);
+                }
+
+                for (const auto& tri : triangles) {
+                    if (tri.size() < 3) continue;
+
+                    // Camera space Z values for depth calculation
+                    float z0 = view_vertices[tri[0]][2];
+                    float z1 = view_vertices[tri[1]][2];
+                    float z2 = view_vertices[tri[2]][2];
+
+                    // Back-face Culling: If any point is behind camera, don't queue
+                    if (z0 <= 0.1f || z1 <= 0.1f || z2 <= 0.1f) continue;
+
+                    float avg_z = (z0 + z1 + z2) / 3.0f;
+
+                    sf::Color shaded_color = calculate_lighting(
+                        vertices[tri[0]], vertices[tri[1]], vertices[tri[2]],
+                        payload.base_color, light
+                    );
+
+                    raster_queue.push_back({
+                        projected_cache[tri[0]],
+                        projected_cache[tri[1]],
+                        projected_cache[tri[2]],
+                        avg_z,
+                        shaded_color
+                    });
+                }
+            }
+
+            // 2. PAINTER'S ALGORITHM: Sort from furthest (highest Z) to closest (lowest Z)
+            std::sort(raster_queue.begin(), raster_queue.end(), [](const ProcessedTriangle& a, const ProcessedTriangle& b) {
+                return a.avg_z > b.avg_z;
+            });
+
+            // 3. Draw in back-to-front order
+            for (const auto& tri : raster_queue) {
+                draw_solid_triangle(window, tri);
             }
 
             m_submit_queue.clear();
