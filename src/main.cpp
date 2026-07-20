@@ -3,87 +3,109 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <cmath>
 #include "line_maker/line_maker.hh"
 #include "line_maker/item_loader.hpp"
 #include "line_maker/renderer.hpp"
 
-class actor{
-    public:
-    int m_start_pos_x;
-    int m_start_pox_y;
-    int m_curr_x;
-    int m_curr_y;
-    bool moving_right = true;
-    bool moving_down = true;
-    sf::CircleShape m_actor_shape;
-    actor(int x,int y) : m_start_pos_x{x}, m_start_pox_y{y}, m_actor_shape{10.f}, m_curr_x{x}, m_curr_y{y}{
-        std::cout << "actor created" << std::endl;
-        m_actor_shape.setFillColor(sf::Color::Green);
-        m_actor_shape.setPosition(m_start_pos_x,m_start_pox_y);
-    }
-    void tick() {
-        int x_delta = 5;
-        int y_delta = 5;
-        if (moving_right){
-            m_curr_x += x_delta;
-        } else {
-            m_curr_x -= x_delta;
-        }
-        if (moving_down){
-            m_curr_y += y_delta;
-        } else {
-            m_curr_y -= y_delta;
-        }
-        if (m_curr_x >= 500){
-            moving_right = false;
-        }
-        if (m_curr_x <=0 ){
-            moving_right = true;
-        }
-        if (m_curr_y >= 500){
-            moving_down = false;
-        }
-        if (m_curr_y <=0 ){
-            moving_down = true;
-        }
-        m_actor_shape.setPosition(m_curr_x,m_curr_y);
-    }
-};
-
-void frame_drawer(std::vector<actor>& actor_vec,sf::RenderWindow& window){
-    for (auto const& act : actor_vec){
-        window.draw(act.m_actor_shape);
+void game_tick(std::vector<item_loader::mesh_actor>& actor_vec) {
+    for (auto& act : actor_vec) {
+        act.tick();
     }
 }
 
-void game_tick(std::vector<actor>& actor_vec){
-    for (auto& act : actor_vec){
-        act.tick();
+void submit_actors(std::vector<item_loader::mesh_actor>& actor_vec, renderer::renderer& render_obj) {
+    for (auto& act : actor_vec) {
+        render_obj.submit(act.draw_self());
     }
 }
 
 int main()
 {
-    // SFML 2 uses direct parameters for VideoMode, not a brace-enclosed list
-    sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 2 works!");
-    std::vector<actor> actor_store;
+    sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 3D Engine");
+    
+    renderer::renderer my_renderer;
+    renderer::Camera main_camera;
+
+    main_camera.x = 0.0f;
+    main_camera.y = 0.0f;
+    main_camera.z = 0.0f; 
+
+    std::vector<item_loader::mesh_actor> actor_store;
     item_loader::mesh_actor teapot("assets/deet.obj", 0.0f, 0.0f, 20.0f);
+    actor_store.push_back(teapot);
+
+    // Movement and rotation speeds
+    const float move_speed = 0.5f;
+    const float rot_speed = 0.03f; // Radians per tick (~1.7 degrees)
+
     while (window.isOpen())
     {
-        sf::Event event; // Allocate event object locally 
-        while (window.pollEvent(event)) // Pass it by reference
+        sf::Event event;
+        while (window.pollEvent(event))
         {
             if (event.type == sf::Event::Closed)
                 window.close();
         }
+
+        // =====================================================================
+        // 1. CAMERA ROTATION (Arrow Keys)
+        // =====================================================================
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))  main_camera.yaw -= rot_speed;  // Turn Left
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) main_camera.yaw += rot_speed;  // Turn Right
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))    main_camera.pitch -= rot_speed; // Look Up
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))  main_camera.pitch += rot_speed; // Look Down
+
+        // Optional: Clamp pitch so the camera doesn't flip upside down (+/- 85 degrees)
+        const float max_pitch = 1.48f; // ~85 degrees in radians
+        if (main_camera.pitch > max_pitch)  main_camera.pitch = max_pitch;
+        if (main_camera.pitch < -max_pitch) main_camera.pitch = -max_pitch;
+
+        // =====================================================================
+        // 2. DIRECTIONAL MOVEMENT (WASD) based on Camera Yaw
+        // =====================================================================
+        // Calculate forward and right unit vectors from current Yaw angle
+        float forward_x =  std::sin(main_camera.yaw);
+        float forward_z =  std::cos(main_camera.yaw);
+        float right_x   =  std::cos(main_camera.yaw);
+        float right_z   = -std::sin(main_camera.yaw);
+
+        // Move Forward / Backward (W / S)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+            main_camera.x += forward_x * move_speed;
+            main_camera.z += forward_z * move_speed;
+        }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+            main_camera.x -= forward_x * move_speed;
+            main_camera.z -= forward_z * move_speed;
+        }
+
+        // Strafe Left / Right (A / D)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+            main_camera.x -= right_x * move_speed;
+            main_camera.z -= right_z * move_speed;
+        }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+            main_camera.x += right_x * move_speed;
+            main_camera.z += right_z * move_speed;
+        }
+
+        // Ascend / Descend vertically (Space / LShift)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))  main_camera.y += move_speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)) main_camera.y -= move_speed;
+
+        // =====================================================================
+        // 3. ENGINE FRAME PASS
+        // =====================================================================
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        window.clear();
+        
         game_tick(actor_store);
-        frame_drawer(actor_store,window);
-        auto vertexes = teapot.draw_self();
-        renderer::render_vertexes(window,vertexes);
-        teapot.tick();
+        submit_actors(actor_store, my_renderer);
+
+        window.clear(sf::Color::Black);
+        my_renderer.render(window, main_camera);
         window.display();
     }
-}
 
+    return 0;
+}
