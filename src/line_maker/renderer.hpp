@@ -123,7 +123,11 @@ namespace renderer {
         }
 
     public:
-        renderer() = default;
+        renderer() {
+            raster_queue.reserve(10000);
+        };
+
+        std::vector<ProcessedTriangle> raster_queue;
 
         void submit(const RenderPayload& payload) {
             m_submit_queue.push_back(payload);
@@ -134,8 +138,6 @@ namespace renderer {
         }
 
         void render(sf::RenderWindow& window, const Camera& main_camera, const DirectionalLight& light) {
-            std::vector<ProcessedTriangle> raster_queue;
-
             // 1. Transform, Shade, and Calculate Depth for ALL triangles across ALL objects
             for (const auto& payload : m_submit_queue) {
                 const auto& vertices = payload.vertices;
@@ -189,6 +191,7 @@ namespace renderer {
             }
 
             m_submit_queue.clear();
+            raster_queue.clear();
         }
     };
 
