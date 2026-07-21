@@ -45,9 +45,12 @@ namespace item_loader {
 
     class mesh_actor {
     public:
-        mesh_actor(const std::string& file_path, float x_offset, float y_offset, float z_offset)
+        mesh_actor(float x_offset, float y_offset, float z_offset)
             : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_angle(0.0f) {
+                std::cout << "Place Holder" << std:: endl;
+            }
             
+        void load_obj_from_disk(const std::string& file_path, float x_offset, float y_offset, float z_offset){
             std::ifstream fs(file_path);
             if (!fs.is_open()) {
                 std::cerr << "Error: Could not properly load OBJ file: " << file_path << std::endl;

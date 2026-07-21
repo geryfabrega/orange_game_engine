@@ -27,7 +27,7 @@ namespace renderer {
     struct RenderPayload {
         std::vector<std::vector<float>> vertices;
         std::vector<std::vector<int>> triangles;
-        sf::Color base_color = sf::Color::Cyan;
+        sf::Color base_color = sf::Color::Blue;
     };
 
     // Helper structure to bundle a transformed triangle with its depth and shaded color
