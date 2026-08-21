@@ -46,11 +46,12 @@ namespace item_loader {
     class mesh_actor {
     public:
         mesh_actor(float x_offset, float y_offset, float z_offset)
-            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_angle(0.0f) {
+            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_angle(0.0f), m_angle_real(0.0f) {
                 std::cout << "Place Holder" << std:: endl;
             }
             
-        void load_obj_from_disk(const std::string& file_path, float x_offset, float y_offset, float z_offset){
+        void load_obj_from_disk(const std::string& file_path){
+            std::cout << "Loading object" << std::endl;
             std::ifstream fs(file_path);
             if (!fs.is_open()) {
                 std::cerr << "Error: Could not properly load OBJ file: " << file_path << std::endl;
@@ -93,12 +94,22 @@ namespace item_loader {
                       << " | Faces: " << m_triangles.size() << std::endl;
         }
 
+	double lockToStep(float value, float step_size) {
+	    // Add a microscopic bias to protect against 1.2999999999999999 scenarios
+	    double step_space = value / step_size;
+	    
+	    // Round to nearest integer step, then multiply back
+	    return std::round(step_space) * step_size;
+	}
+
         void tick() {
-            m_angle += 0.02f; // Increments animation speed
+            m_angle_real += 0.09f; // Increments animation speed
+	    m_angle = lockToStep(m_angle_real,.1);
             if (m_angle > 6.28318f) {
                 m_angle -= 6.28318f;
             }
         }
+
 
         std::pair<  std::vector<std::vector<float>> , std::vector<std::vector<int>>    > draw_self(){
             float cos_a = std::cos(m_angle);
@@ -138,6 +149,7 @@ namespace item_loader {
         float m_y_offset;
         float m_z_offset;
         float m_angle;
+	float m_angle_real;
     };
 
 } // namespace item_loader
