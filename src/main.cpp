@@ -7,33 +7,40 @@
 #include "line_maker/line_maker.hh"
 #include "line_maker/item_loader.hpp"
 #include "line_maker/renderer.hpp"
+#include "line_maker/load_character.hpp"
 
-void game_tick(std::vector<item_loader::mesh_actor>& actor_vec) {
+void game_tick(std::vector<character>& actor_vec) {
     for (auto& act : actor_vec) {
         act.tick();
     }
 }
 
-void submit_actors(std::vector<item_loader::mesh_actor>& actor_vec, renderer::renderer& render_obj) {
+void submit_actors(std::vector<character>& actor_vec, renderer::renderer& render_obj) {
     for (auto& act : actor_vec) {
         // Construct the payload with vertices, triangles, and a custom actor color
         renderer::RenderPayload payload;
-        auto mesh_data = act.draw_self();
-        
-        payload.vertices = std::move(mesh_data.first);
-        payload.triangles = std::move(mesh_data.second);
-        payload.base_color = sf::Color(220, 100, 50); // Vibrant Copper/Orange Teapot!
-
-        render_obj.submit(std::move(payload));
+        auto mesh_data_vector = act.draw_self();
+        for (auto& mesh_data : mesh_data_vector){
+            payload.vertices = std::move(mesh_data.first);
+            payload.triangles = std::move(mesh_data.second);
+            payload.base_color = sf::Color(255, 192, 203); // Vibrant Copper/Orange Teapot!
+            render_obj.submit(std::move(payload));
+        }
     }
 }
 
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 3D Light Engine");
+    sf::RenderWindow window(sf::VideoMode(750, 750), "SFML 3D Light Engine");
     
     renderer::renderer my_renderer;
     renderer::Camera main_camera;
+
+    const int target_fps = 60;
+    const std::chrono::nanoseconds frame_duration(1000000000 / target_fps);
+
+    // Record the starting time
+    auto next_frame_time = std::chrono::steady_clock::now();
 
     // Create a sun light coming down from the top-right-front
     renderer::DirectionalLight sun_light;
@@ -45,10 +52,10 @@ int main()
     main_camera.x = 0.0f;
     main_camera.y = 0.0f;
     main_camera.z = 0.0f; 
-
-    std::vector<item_loader::mesh_actor> actor_store;
-    item_loader::mesh_actor teapot("assets/deet.obj", 0.0f, 0.0f, 5.0f);
-    actor_store.push_back(teapot);
+              
+    std::vector<character> actor_store;
+    character* teapot = new character(0.0f, 0.0f, 5.0f);
+    actor_store.push_back(*teapot);
 
     const float move_speed = 0.5f;
     const float rot_speed = 0.03f;
@@ -104,6 +111,10 @@ int main()
 
         window.clear(sf::Color(30, 30, 30)); // Dark grey background
         my_renderer.render(window, main_camera, sun_light);
+        next_frame_time += frame_duration;
+
+        // Put the thread to sleep until the exact target time is reached
+        std::this_thread::sleep_until(next_frame_time);
         window.display();
     }
 

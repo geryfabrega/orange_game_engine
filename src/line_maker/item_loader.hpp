@@ -45,10 +45,23 @@ namespace item_loader {
 
     class mesh_actor {
     public:
+        float x_offset_relative_to_parent = 0;
+        float y_offset_relative_to_parent = 0;
+        float z_offset_relative_to_parent = 0;
+        float m_angle;
+	    float m_angle_real;
+
         mesh_actor(float x_offset, float y_offset, float z_offset)
             : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_angle(0.0f), m_angle_real(0.0f) {
                 std::cout << "Place Holder" << std:: endl;
             }
+        // IF the limb is the MAIN limb aka torso, set to 0,0,0. else set to limb relative position to main
+        // body part
+        void set_relative_position_to_parent(float x,float y, float z){
+            x_offset_relative_to_parent = x;
+            y_offset_relative_to_parent = y;
+            z_offset_relative_to_parent = z;
+        }
             
         void load_obj_from_disk(const std::string& file_path){
             std::cout << "Loading object" << std::endl;
@@ -103,11 +116,13 @@ namespace item_loader {
 	}
 
         void tick() {
-            m_angle_real += 0.09f; // Increments animation speed
-	    m_angle = lockToStep(m_angle_real,.1);
-            if (m_angle > 6.28318f) {
-                m_angle -= 6.28318f;
-            }
+            // making this a no-op for now, ticks should be done at character level.
+            // m_angle_real += 0.1f; // Increments animation speed
+	        // m_angle = lockToStep(m_angle_real,.005);
+            // if (m_angle > 6.28318f) {
+            //     m_angle -= 6.28318f;
+            // }
+            ;
         }
 
 
@@ -120,9 +135,9 @@ namespace item_loader {
             std::vector<std::vector<float>> mutated_world_vertexes(m_local_vertices.size());
 
             for (size_t i = 0; i < m_local_vertices.size(); ++i) {
-                float x = m_local_vertices[i][0];
-                float y = m_local_vertices[i][1];
-                float z = m_local_vertices[i][2];
+                float x = m_local_vertices[i][0] + x_offset_relative_to_parent; //  we undo the offsets applied if given
+                float y = m_local_vertices[i][1] + y_offset_relative_to_parent; //  If this itme loaded is a part of a character assemble
+                float z = m_local_vertices[i][2] + z_offset_relative_to_parent;
 
                 // Y-axis Rotation calculations
                 float rot_x = x * cos_a - z * sin_a;
@@ -148,8 +163,6 @@ namespace item_loader {
         float m_x_offset;
         float m_y_offset;
         float m_z_offset;
-        float m_angle;
-	float m_angle_real;
     };
 
 } // namespace item_loader
