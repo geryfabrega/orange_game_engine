@@ -48,11 +48,13 @@ namespace item_loader {
         float x_offset_relative_to_parent = 0;
         float y_offset_relative_to_parent = 0;
         float z_offset_relative_to_parent = 0;
-        float m_angle;
+        float m_angle_x = 0.0f; // Rotation around X-axis (Pitch / Barrel Roll)
+        float m_angle = 0.0f;   // Rotation around Y-axis (Yaw)
 	    float m_angle_real;
+        sf::Color m_color = sf::Color::White;
 
-        mesh_actor(float x_offset, float y_offset, float z_offset)
-            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_angle(0.0f), m_angle_real(0.0f) {
+        mesh_actor(float x_offset, float y_offset, float z_offset, sf::Color color = sf::Color::White)
+            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_color(color), m_angle_x(0.0f), m_angle(0.0f), m_angle_real(0.0f) {
                 std::cout << "Place Holder" << std:: endl;
             }
         // IF the limb is the MAIN limb aka torso, set to 0,0,0. else set to limb relative position to main
@@ -61,6 +63,33 @@ namespace item_loader {
             x_offset_relative_to_parent = x;
             y_offset_relative_to_parent = y;
             z_offset_relative_to_parent = z;
+        }
+
+        void set_position(float x, float y, float z) {
+            m_x_offset = x;
+            m_y_offset = y;
+            m_z_offset = z;
+        }
+
+        void set_angle(float angle) {
+            m_angle = angle;
+        }
+
+        void set_angle_x(float angle_x) {
+            m_angle_x = angle_x;
+        }
+
+        void set_rotation(float angle_x, float angle_y) {
+            m_angle_x = angle_x;
+            m_angle = angle_y;
+        }
+
+        void set_color(const sf::Color& color) {
+            m_color = color;
+        }
+
+        sf::Color get_color() const {
+            return m_color;
         }
             
         void load_obj_from_disk(const std::string& file_path){
@@ -126,34 +155,38 @@ namespace item_loader {
         }
 
 
-        std::pair<  std::vector<std::vector<float>> , std::vector<std::vector<int>>    > draw_self(){
-            float cos_a = std::cos(m_angle);
-            float sin_a = std::sin(m_angle);
+        std::pair<std::vector<std::vector<float>>, std::vector<std::vector<int>>> draw_self() {
+            float cos_y = std::cos(m_angle);
+            float sin_y = std::sin(m_angle);
+            float cos_x = std::cos(m_angle_x);
+            float sin_x = std::sin(m_angle_x);
 
-            // Transform local vertices into world coordinates using stack cache allocation
-            // std::vector<std::pair<float, float>> projected_cache(m_local_vertices.size());
             std::vector<std::vector<float>> mutated_world_vertexes(m_local_vertices.size());
 
             for (size_t i = 0; i < m_local_vertices.size(); ++i) {
-                float x = m_local_vertices[i][0] + x_offset_relative_to_parent; //  we undo the offsets applied if given
-                float y = m_local_vertices[i][1] + y_offset_relative_to_parent; //  If this itme loaded is a part of a character assemble
+                float x = m_local_vertices[i][0] + x_offset_relative_to_parent;
+                float y = m_local_vertices[i][1] + y_offset_relative_to_parent;
                 float z = m_local_vertices[i][2] + z_offset_relative_to_parent;
 
-                // Y-axis Rotation calculations
-                float rot_x = x * cos_a - z * sin_a;
-                float rot_y = y;
-                float rot_z = x * sin_a + z * cos_a;
+                // 1. X-axis Rotation (Pitch / Barrel Roll)
+                float rx1 = x;
+                float ry1 = y * cos_x - z * sin_x;
+                float rz1 = y * sin_x + z * cos_x;
+
+                // 2. Y-axis Rotation (Yaw)
+                float rx2 = rx1 * cos_y + rz1 * sin_y;
+                float ry2 = ry1;
+                float rz2 = -rx1 * sin_y + rz1 * cos_y;
 
                 std::vector<float> transformed_vertex = {
-                    rot_x + m_x_offset,
-                    rot_y + m_y_offset,
-                    rot_z + m_z_offset
+                    rx2 + m_x_offset,
+                    ry2 + m_y_offset,
+                    rz2 + m_z_offset
                 };
 
                 mutated_world_vertexes[i] = transformed_vertex;
             }
-            std::pair<  std::vector<std::vector<float>> , std::vector<std::vector<int>>    > ret_pair{mutated_world_vertexes,m_triangles};
-            return ret_pair;
+            return { mutated_world_vertexes, m_triangles };
         }
 
     private:
