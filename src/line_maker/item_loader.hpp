@@ -48,40 +48,55 @@ namespace item_loader {
         float x_offset_relative_to_parent = 0;
         float y_offset_relative_to_parent = 0;
         float z_offset_relative_to_parent = 0;
-        float m_angle_x = 0.0f; // Rotation around X-axis (Pitch / Barrel Roll)
-        float m_angle = 0.0f;   // Rotation around Y-axis (Yaw)
-	    float m_angle_real;
+        float m_angle_x = 0.0f; // Rotation around X-axis (Pitch)
+        float m_angle_y = 0.0f; // Rotation around Y-axis (Yaw)
+        float m_angle_z = 0.0f; // Rotation around Z-axis (Roll)
+        float m_angle = 0.0f;   // Backward-compatible alias for Y-axis rotation (Yaw)
+	    float m_angle_real = 0.0f;
         sf::Color m_color = sf::Color::White;
 
-        mesh_actor(float x_offset, float y_offset, float z_offset, sf::Color color = sf::Color::White)
-            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_color(color), m_angle_x(0.0f), m_angle(0.0f), m_angle_real(0.0f) {
+        mesh_actor(float x_offset = 0.0f, float y_offset = 0.0f, float z_offset = 0.0f, sf::Color color = sf::Color::White)
+            : m_x_offset(x_offset), m_y_offset(y_offset), m_z_offset(z_offset), m_color(color),
+              m_angle_x(0.0f), m_angle_y(0.0f), m_angle_z(0.0f), m_angle(0.0f), m_angle_real(0.0f) {
                 std::cout << "Place Holder" << std:: endl;
             }
         // IF the limb is the MAIN limb aka torso, set to 0,0,0. else set to limb relative position to main
         // body part
-        void set_relative_position_to_parent(float x,float y, float z){
+        void set_relative_position_to_parent(float x = 0.0f, float y = 0.0f, float z = 0.0f) {
             x_offset_relative_to_parent = x;
             y_offset_relative_to_parent = y;
             z_offset_relative_to_parent = z;
         }
 
-        void set_position(float x, float y, float z) {
+        void set_position(float x = 0.0f, float y = 0.0f, float z = 0.0f) {
             m_x_offset = x;
             m_y_offset = y;
             m_z_offset = z;
         }
 
-        void set_angle(float angle) {
+        void set_angle(float angle = 0.0f) {
             m_angle = angle;
+            m_angle_y = angle;
         }
 
-        void set_angle_x(float angle_x) {
+        void set_angle_x(float angle_x = 0.0f) {
             m_angle_x = angle_x;
         }
 
-        void set_rotation(float angle_x, float angle_y) {
-            m_angle_x = angle_x;
+        void set_angle_y(float angle_y = 0.0f) {
+            m_angle_y = angle_y;
             m_angle = angle_y;
+        }
+
+        void set_angle_z(float angle_z = 0.0f) {
+            m_angle_z = angle_z;
+        }
+
+        void set_rotation(float angle_x = 0.0f, float angle_y = 0.0f, float angle_z = 0.0f) {
+            m_angle_x = angle_x;
+            m_angle_y = angle_y;
+            m_angle = angle_y;
+            m_angle_z = angle_z;
         }
 
         void set_color(const sf::Color& color) {
@@ -156,10 +171,13 @@ namespace item_loader {
 
 
         std::pair<std::vector<std::vector<float>>, std::vector<std::vector<int>>> draw_self() {
-            float cos_y = std::cos(m_angle);
-            float sin_y = std::sin(m_angle);
+            float eff_angle_y = (m_angle_y != 0.0f) ? m_angle_y : m_angle;
             float cos_x = std::cos(m_angle_x);
             float sin_x = std::sin(m_angle_x);
+            float cos_y = std::cos(eff_angle_y);
+            float sin_y = std::sin(eff_angle_y);
+            float cos_z = std::cos(m_angle_z);
+            float sin_z = std::sin(m_angle_z);
 
             std::vector<std::vector<float>> mutated_world_vertexes(m_local_vertices.size());
 
@@ -178,10 +196,15 @@ namespace item_loader {
                 float ry2 = ry1;
                 float rz2 = -rx1 * sin_y + rz1 * cos_y;
 
+                // 3. Z-axis Rotation (Roll)
+                float rx3 = rx2 * cos_z - ry2 * sin_z;
+                float ry3 = rx2 * sin_z + ry2 * cos_z;
+                float rz3 = rz2;
+
                 std::vector<float> transformed_vertex = {
-                    rx2 + m_x_offset,
-                    ry2 + m_y_offset,
-                    rz2 + m_z_offset
+                    rx3 + m_x_offset,
+                    ry3 + m_y_offset,
+                    rz3 + m_z_offset
                 };
 
                 mutated_world_vertexes[i] = transformed_vertex;

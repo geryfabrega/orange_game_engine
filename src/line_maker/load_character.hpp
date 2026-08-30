@@ -185,6 +185,14 @@ public:
         }
     }
 
+    virtual void set_rotation(float angle_x, float angle_y, float angle_z = 0.0f) {
+        m_angle = angle_y;
+        m_target_angle = angle_y;
+        for (auto& limb : m_limbs) {
+            limb.set_rotation(angle_x, angle_y, angle_z);
+        }
+    }
+
     // Trigger jump
     virtual void jump() {
         if (m_is_grounded) {
@@ -295,7 +303,7 @@ public:
                 if (m_vy >= 0.0f) {
                     // Falling down (+Y): Landing on top surface of other
                     float prev_bottom = m_hitbox.get_bottom_y(prev_y);
-                    if (prev_bottom <= other_box.min_y + 0.6f) {
+                    if (prev_bottom <= other_box.min_y + 0.75f) {
                         new_y = other_box.min_y - (m_hitbox.offset_y + m_hitbox.half_height);
                         m_vy = 0.0f;
                         m_is_grounded = true;
@@ -551,14 +559,12 @@ public:
 };
 
 // =========================================================================
-// GROUND PLATFORM ACTOR (Flat Grass Ground Platform with Grass Texture)
+// GROUND PLATFORM ACTOR (Flat Grass Ground Platform)
 // =========================================================================
 class ground_actor : public character {
 public:
     float m_surface_y = 1.0f; // Top surface level of the platform
     float m_platform_half_size = 30.0f;
-    sf::Texture m_grass_texture;
-    bool m_has_grass_texture = false;
 
     ground_actor(float x_offset = 0.0f, float y_offset = 0.0f, float z_offset = 0.0f,
                  sf::Color grass_color = sf::Color(65, 175, 75))
@@ -578,47 +584,41 @@ public:
 
         // Add 3D flat platform mesh
         add_limb("assets/ground_platform.obj", 0.0f, 0.0f, 0.0f, grass_color);
-
-        // Load Grass texture
-        if (m_grass_texture.loadFromFile("assets/textures/grass.png")) {
-            m_grass_texture.setSmooth(true);
-            m_grass_texture.setRepeated(true);
-            m_has_grass_texture = true;
-        }
     }
 
-    // Overlay grass texture patches across the flat platform stage
-    std::vector<renderer::TextureRenderPayload> draw_textures() const override {
-        std::vector<renderer::TextureRenderPayload> payloads;
-        if (!m_has_grass_texture) return payloads;
-
-        const int grid_x = 5;
-        const int grid_z = 5;
-        const float spacing = 11.0f;
-
-        for (int gz = 0; gz < grid_z; ++gz) {
-            float pz = m_z_offset - 22.0f + gz * spacing;
-            for (int gx = 0; gx < grid_x; ++gx) {
-                float px = m_x_offset - 22.0f + gx * spacing;
-
-                renderer::TextureRenderPayload payload;
-                payload.texture = &m_grass_texture;
-                payload.world_x = px;
-                payload.world_y = m_y_offset + m_surface_y - 0.02f;
-                payload.world_z = pz;
-                payload.width = 6.5f;
-                payload.height = 6.5f;
-                payload.angle = 0.0f;
-                payload.tint = sf::Color(255, 255, 255, 220);
-                payload.is_horizontal_plane = true; // Lay flat horizontally on top of the ground platform
-                payload.billboard = false;
-                payload.cull_backface = false;
-
-                payloads.push_back(payload);
-            }
+    void tick() override {
+        if (!m_limbs.empty()) {
+            m_limbs[0].tick();
         }
+    }
+};
 
-        return payloads;
+class island_actor : public character {
+public:
+    float m_surface_y = 1.0f; // Top surface level of the platform
+    float m_platform_half_size = 30.0f;
+
+    island_actor(float x_offset = 0.0f, float y_offset = 0.0f, float z_offset = 0.0f,
+                 sf::Color sand_color = sf::Color(255, 255, 133))
+        : character(x_offset, y_offset, z_offset)
+    {
+        m_is_solid = true;
+        m_is_dynamic = false;
+        m_has_gravity = false;
+
+        // Hitbox representing the 3D flat platform stage (Mesh extends from Y=1 to Y=4)
+        m_hitbox.offset_x = 0.0f;
+        m_hitbox.offset_y = 0.0f; // Center of Y=[1.0, 4.0]
+        m_hitbox.offset_z = 0.0f;
+        m_hitbox.half_width = m_platform_half_size;
+        m_hitbox.half_height = 1.0f; // Top is 2.5 - 1.5 = 1.0f, Bottom is 2.5 + 1.5 = 4.0f
+        m_hitbox.half_depth = m_platform_half_size;
+
+        // Add 3D flat platform mesh
+        add_limb("assets/island.obj", 0.0f, 0.0f, 0.0f, sand_color);
+
+        // Rotate 180 degrees (pi radians) around the Y-axis
+        set_rotation(3.14159f, 3.14159265f, 0.0f);
     }
 
     void tick() override {

@@ -22,7 +22,7 @@ void submit_actors(std::vector<std::unique_ptr<character>>& actor_vec, renderer:
             render_obj.submit(std::move(payload));
         }
 
-        // 2. Submit Textures (Decals, Grass textures & Sky Clouds)
+        // 2. Submit Textures (Decals & Sky Clouds)
         for (auto& tex_payload : act->draw_textures()) {
             render_obj.submit_texture(tex_payload);
         }
@@ -34,7 +34,7 @@ int main()
     sf::RenderWindow window(sf::VideoMode(500, 500), "SFML 3D Platformer + In-Game Linux Terminal");
     
     renderer::renderer my_renderer;
-    my_renderer.set_ps1_effect(true, 1.0f); // Higher PS1 vertex snapping jitter (4.0px grid)
+    my_renderer.set_ps1_effect(true, 2.0f); // Higher PS1 vertex snapping jitter (4.0px grid)
 
     // 3D Platformer Follow Camera
     renderer::Camera main_camera;
@@ -61,6 +61,9 @@ int main()
 
     // 1. Flat 3D Grass Ground Platform (Lush vibrant grass green)
     auto ground_floor = std::make_unique<ground_actor>(0.0f, 0.0f, 0.0f, sf::Color(105, 215, 85));
+
+    auto island_1 = std::make_unique<island_actor>(0.0f, 0.0f, 0.0f);
+    actor_store.push_back(std::move(island_1));
     actor_store.push_back(std::move(ground_floor));
 
     // 2. Interactive Retro Computer Terminal in the 3D World
@@ -229,7 +232,7 @@ int main()
         // Bright Sky Blue Background
         window.clear(sf::Color(105, 190, 255));
 
-        // Unified 3D Render Pass (Polygons, Grass, Kirby, Decals & Clouds in True Painter's Depth Order)
+        // Unified 3D Render Pass (Polygons, Kirby, Decals & Clouds in True Painter's Depth Order)
         my_renderer.render_scene(window, main_camera, sun_light);
 
         // =====================================================================
